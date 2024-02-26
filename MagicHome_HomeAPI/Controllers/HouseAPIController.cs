@@ -9,24 +9,30 @@ namespace MagicHome_HomeAPI.Controllers
 {
     [ApiController]
     [Route("api/HouseAPI")]
-    public class HouseAPIController : Controller
+    public class HouseAPIController : ControllerBase
     {
         //private readonly ILogger<HouseAPIController> _logger;  
         //public HouseAPIController(ILogger<HouseAPIController> logger)
         //{
         //    _logger = logger;  
         //}
-        private readonly ILogging _logger;  
-        public HouseAPIController(ILogging logger)
-        {
-            _logger = logger; 
+        //private readonly ILogging _logger;  
+        //public HouseAPIController(ILogging logger)
+        //{
+        //    _logger = logger; 
+        //}
+
+        private readonly ApplicationDbContext _db;
+        public HouseAPIController(ApplicationDbContext db) 
+        { 
+             _db =db;
         }
 
         [HttpGet]
         public ActionResult<IEnumerable<HouseDTO>> GetAllHouses()
         {
-            _logger.Log("Getting all houses","");
-            return Ok(HouseStore.houses);
+            //_logger.Log("Getting all houses","");
+            return Ok(_db.Houses.ToList());
         }
         [HttpGet("{id:int}", Name ="GetHouse")]
         [ProducesResponseType(StatusCodes.Status200OK)]
@@ -36,38 +42,52 @@ namespace MagicHome_HomeAPI.Controllers
         {
             if(id==0)
             {
-                _logger.Log("Get House Error with Id"+ id, "error");
+                //_logger.Log("Get House Error with Id"+ id, "error");
                 return BadRequest();
             }
-           HouseDTO house = HouseStore.houses.FirstOrDefault(u=>u.Id ==id);
+           var house = _db.Houses.FirstOrDefault(u=>u.Id ==id);
             if(house==null)
             {
                 return NotFound();  
             }
-           return house;
+           return Ok(house);
         }
         [HttpPost]
         [ProducesResponseType(StatusCodes.Status201Created)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public ActionResult<HouseDTO> CreateHouse(HouseDTO house)
+        public ActionResult<HouseDTO> CreateHouse(HouseDTO houseDTO)
         {   
-            if(HouseStore.houses.FirstOrDefault(u=>u.Name.ToLower()==house.Name.ToLower()) !=null)
+            if(_db.Houses.FirstOrDefault(u=>u.Name.ToLower()==houseDTO.Name.ToLower()) !=null)
             {
                 ModelState.AddModelError("CustomError", "House Already Exists");
                 return BadRequest();    
             }
-            if(house == null) 
+            if(houseDTO == null) 
             {
-                return BadRequest(house);    
+                return BadRequest(houseDTO);    
             }
-            if(house.Id>0) 
+            if(houseDTO.Id>0) 
             {
                 return StatusCode(StatusCodes.Status500InternalServerError);    
             }
-            house.Id = HouseStore.houses.OrderByDescending(u => u.Id).FirstOrDefault().Id + 1;  
-            HouseStore.houses.Add(house);
-            return CreatedAtRoute("GetHouse",new { id = house.Id},house);
+            House house = new()
+            {
+                Amenity = houseDTO.Amenity,
+                Details = houseDTO.Details,
+                Id= houseDTO.Id,
+                ImageUrl= houseDTO.ImageUrl,
+                Name= houseDTO.Name,    
+                Occupancy= houseDTO.Occupancy,
+                Rate= houseDTO.Rate,
+                Sqft = houseDTO.Sqft
+
+            };
+          
+            _db.Houses.Add(house);
+            _db.SaveChanges();
+            return CreatedAtRoute("GetHouse", new {id =houseDTO.Id}, houseDTO);
+           
 
 
         }
@@ -81,14 +101,15 @@ namespace MagicHome_HomeAPI.Controllers
             {
                 return BadRequest();
             }
-            var houseToDelete = HouseStore.houses.FirstOrDefault(u => u.Id == id);
+            var houseToDelete = _db.Houses.FirstOrDefault(u => u.Id == id);
             if (houseToDelete == null)
             {
                 return NotFound();
             }
 
 
-            HouseStore.houses.Remove(houseToDelete);
+            _db.Houses.Remove(houseToDelete);
+            _db.SaveChanges();
             return NoContent();
         }
         [HttpPut("{id:int}", Name = "UpdateHouse")]
@@ -103,10 +124,24 @@ namespace MagicHome_HomeAPI.Controllers
                 return BadRequest();    
             }
             
-            var houseToUpdate = HouseStore.houses.FirstOrDefault(u => u.Id == id);
-            houseToUpdate.Name = houseDTO.Name;
-            houseToUpdate.Occupancy = houseDTO.Occupancy;
-            houseToUpdate.Sqft = houseDTO.Sqft;
+            //var houseToUpdate = _db.Houses.FirstOrDefault(u => u.Id == id);
+            //houseToUpdate.Name = houseDTO.Name;
+            //houseToUpdate.Occupancy = houseDTO.Occupancy;
+            //houseToUpdate.Sqft = houseDTO.Sqft;
+            House house = new House()
+            {
+                Amenity = houseDTO.Amenity,
+                Details = houseDTO.Details,
+                Id = houseDTO.Id,
+                ImageUrl = houseDTO.ImageUrl,
+                Name = houseDTO.Name,
+                Occupancy = houseDTO.Occupancy,
+                Rate = houseDTO.Rate,
+                Sqft = houseDTO.Sqft
+
+            };
+            _db.Houses.Update(house);
+            _db.SaveChanges();
             return NoContent();
 
         }
@@ -122,16 +157,38 @@ namespace MagicHome_HomeAPI.Controllers
                 return BadRequest();
             }
 
-            var houseToUpdate = HouseStore.houses.FirstOrDefault(u => u.Id == id);
-           if(houseToUpdate == null)
+            var house = _db.Houses.FirstOrDefault(u => u.Id == id);
+            HouseDTO houseDTO = new ()
+            {
+                Amenity = house.Amenity,
+                Details = house.Details,
+                Id = house.Id,
+                ImageUrl = house.ImageUrl,
+                Name = house.Name,
+                Occupancy = house.Occupancy,
+                Rate = house.Rate,
+                Sqft = house.Sqft
+
+            };
+
+            if (houseDTO == null)
            {
                return BadRequest();  
            }
-           patchDTO.ApplyTo(houseToUpdate,ModelState); 
-           if(!ModelState.IsValid)
-           {
-            return BadRequest(ModelState);    
-           }
+           patchDTO.ApplyTo(houseDTO,ModelState);
+            House houseModel = new()
+            {
+                Amenity = houseDTO.Amenity,
+                Details = houseDTO.Details,
+                Id = houseDTO.Id,
+                ImageUrl = houseDTO.ImageUrl,
+                Name = houseDTO.Name,
+                Occupancy = houseDTO.Occupancy,
+                Rate = houseDTO.Rate,
+                Sqft = houseDTO.Sqft
+            };
+            _db.Houses.Update(houseModel);
+            _db.SaveChanges();
            return NoContent();  
             
 
